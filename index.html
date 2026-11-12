@@ -1,0 +1,832 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Sorting, Line by Line</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<style>
+body { margin: 0; } [hidden] { display: none !important; }
+/* Layout: tool page. Algorithm tabs + controls on top, code (left) beside live state (right); stacks on phones. */
+:root {
+  --bg: #F3F5F8;
+  --surface: #FFFFFF;
+  --ink: #17202C;
+  --muted: #5B6779;
+  --line: #DAE0E8;
+  --accent: #2C59E6;
+  --tile: #C5D0DE;
+  --tile-ink: #17202C;
+  --code-bg: #101827;
+  --code-ink: #D3DCE8;
+  --code-dim: #6E7C91;
+  --code-kw: #8FB2FF;
+  --code-fn: #F5C66B;
+  --code-num: #F29C8B;
+  --code-active: rgba(245, 198, 107, 0.16);
+  --cmp: #E9A400;
+  --swap: #E2474F;
+  --done: #17996A;
+  --min: #8656E8;
+  --held: #2C59E6;
+  --sorted: #9FD8C2;
+  --font-ui: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-code: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0D1117; --surface: #151B24; --ink: #E4E9F1; --muted: #94A0B3; --line: #273142;
+    --accent: #7D9CFF; --tile: #3A4659; --tile-ink: #E4E9F1;
+    --code-bg: #0A0F18; --code-active: rgba(245, 198, 107, 0.14);
+    --cmp: #F2B630; --swap: #F0646B; --done: #35C08D; --min: #A884F5; --held: #7D9CFF; --sorted: #2D6B55;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0D1117; --surface: #151B24; --ink: #E4E9F1; --muted: #94A0B3; --line: #273142;
+  --accent: #7D9CFF; --tile: #3A4659; --tile-ink: #E4E9F1;
+  --code-bg: #0A0F18; --code-active: rgba(245, 198, 107, 0.14);
+  --cmp: #F2B630; --swap: #F0646B; --done: #35C08D; --min: #A884F5; --held: #7D9CFF; --sorted: #2D6B55;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--font-ui); font-size: 15px; line-height: 1.5; }
+.wrap { max-width: 1200px; margin: 0 auto; padding-block: 24px 48px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: grid; gap: 16px; }
+header { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 12px 24px; }
+h1 { margin: 0; font-size: 26px; font-weight: 700; letter-spacing: -0.01em; text-wrap: balance; }
+.sub { margin: 2px 0 0; color: var(--muted); max-width: 62ch; }
+.tabs { display: flex; flex-wrap: wrap; gap: 6px; }
+.tab { font: 500 14px var(--font-code); padding: 7px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); cursor: pointer; }
+.tab[aria-selected="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.tab:focus-visible, button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.controls { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
+.controls .group { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+button.btn { font: 500 14px var(--font-ui); padding: 7px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); cursor: pointer; }
+button.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; min-width: 92px; }
+button.btn:disabled { opacity: 0.4; cursor: default; }
+.counter { font: 500 13px var(--font-code); color: var(--muted); font-variant-numeric: tabular-nums; min-width: 9ch; }
+#scrub { flex: 1 1 160px; min-width: 120px; accent-color: var(--accent); }
+.controls label { font-size: 13px; color: var(--muted); }
+#nums { font: 14px var(--font-code); width: 15ch; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); }
+.err { color: var(--swap); font-size: 13px; }
+
+.main { display: grid; grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr); gap: 16px; align-items: start; }
+@media (max-width: 880px) { .main { grid-template-columns: minmax(0, 1fr); } }
+
+.code { background: var(--code-bg); color: var(--code-ink); border-radius: 12px; padding: 14px 0; overflow-x: auto; font: 13.5px/1.7 var(--font-code); }
+.code .ln { display: flex; white-space: pre; padding: 0 16px 0 0; border-left: 3px solid transparent; }
+.code .ln .no { width: 3.2em; flex: none; text-align: right; padding-right: 1.2em; color: var(--code-dim); user-select: none; }
+.code .ln.active { background: var(--code-active); border-left-color: var(--code-fn); }
+.code .ln.active .no { color: var(--code-fn); }
+.code .kw { color: var(--code-kw); }
+.code .bi { color: #9ED9C6; }
+.code .fn { color: var(--code-fn); }
+.code .num { color: var(--code-num); }
+
+.side { display: grid; gap: 16px; min-width: 0; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; min-width: 0; }
+.eyebrow { font: 600 11px var(--font-ui); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin: 0 0 6px; }
+.explain .linecode { font: 13px var(--font-code); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; white-space: pre-wrap; word-break: break-word; margin-bottom: 10px; }
+.explain .what { color: var(--muted); margin: 0 0 12px; }
+.explain .now { font-size: 16px; margin: 0; min-height: 3em; }
+.explain .now b { font-weight: 600; }
+.finished { display: inline-block; margin-top: 8px; font: 600 12px var(--font-ui); color: var(--done); border: 1px solid var(--done); border-radius: 99px; padding: 2px 10px; }
+
+.rows { display: grid; gap: 14px; }
+.row { display: grid; grid-template-columns: 8.5ch minmax(0, 1fr); gap: 10px; align-items: end; }
+.row.dim { opacity: 0.5; }
+.row .name { font: 500 13px var(--font-code); color: var(--muted); padding-bottom: 22px; text-align: right; overflow-wrap: anywhere; }
+.cells { display: flex; gap: 6px; align-items: flex-end; flex-wrap: wrap; min-height: 40px; }
+.cellwrap { display: grid; justify-items: center; gap: 3px; width: 40px; }
+.cell { width: 40px; border-radius: 6px 6px 3px 3px; background: var(--tile); color: var(--tile-ink); display: flex; align-items: flex-start; justify-content: center; padding-top: 4px; font: 600 14px var(--font-code); transition: height 0.25s ease, background-color 0.2s ease; border: 2px solid transparent; }
+.cell.cmp { background: var(--cmp); color: #1A1300; }
+.cell.swap { background: var(--swap); color: #fff; }
+.cell.done { background: var(--done); color: #fff; }
+.cell.min { background: var(--min); color: #fff; }
+.cell.held { background: var(--held); color: #fff; }
+.cell.sorted { background: var(--sorted); }
+.cell.gap { background: transparent; border: 2px dashed var(--muted); color: var(--muted); }
+.cell.taken { opacity: 0.3; }
+.cell.half-l { box-shadow: inset 0 -4px 0 var(--held); }
+.cell.half-r { box-shadow: inset 0 -4px 0 var(--min); }
+.cell.pivot { background: var(--min); color: #fff; }
+.idx { font: 11px var(--font-code); color: var(--muted); font-variant-numeric: tabular-nums; }
+.ptr { font: 600 11px var(--font-code); color: var(--accent); min-height: 15px; white-space: nowrap; }
+.empty { font: 14px var(--font-code); color: var(--muted); padding-bottom: 22px; }
+
+.vars { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; }
+.var { font: 13px var(--font-code); border: 1px solid var(--line); border-radius: 6px; padding: 3px 8px; background: var(--bg); transition: background-color 0.2s; }
+.var.changed { border-color: var(--cmp); background: color-mix(in srgb, var(--cmp) 18%, var(--bg)); }
+.novars { font-size: 13px; color: var(--muted); }
+
+.stack { display: grid; gap: 4px; }
+.frame { font: 13px var(--font-code); padding: 5px 8px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); overflow-wrap: anywhere; }
+.frame.top { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, var(--bg)); }
+.frame .note { color: var(--muted); font-family: var(--font-ui); font-size: 12px; }
+
+.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12.5px; color: var(--muted); margin-top: 14px; }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend i { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+.keys { font-size: 12.5px; color: var(--muted); }
+kbd { font: 11px var(--font-code); border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; padding: 0 4px; background: var(--surface); }
+.about { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 8px 28px; }
+@media (max-width: 880px) { .about { grid-template-columns: minmax(0, 1fr); } }
+.about h2 { grid-column: 1 / -1; margin: 0; font: 600 18px var(--font-ui); }
+.about h2 code { font: 600 17px var(--font-code); }
+.about .idea { font-size: 16px; margin: 0 0 8px; max-width: 65ch; }
+.about ol { margin: 0; padding-left: 1.3em; display: grid; gap: 3px; }
+.about dl { margin: 0; display: grid; gap: 8px; }
+.about dt { font: 600 11px var(--font-ui); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.about dd { margin: 0; }
+.compare summary { cursor: pointer; font-weight: 600; }
+.tablewrap { overflow-x: auto; margin-top: 12px; }
+.compare table { border-collapse: collapse; width: 100%; min-width: 760px; font-size: 13.5px; }
+.compare th, .compare td { text-align: left; vertical-align: top; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+.compare th { font: 600 11px var(--font-ui); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.compare code, .pairnote code { font-family: var(--font-code); }
+.pairnote { margin: 12px 0 0; max-width: 90ch; }
+@media (prefers-reduced-motion: reduce) { .cell, .var { transition: none; } }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Sorting, Line by Line</h1>
+      <p class="sub">Five classic sorting algorithms in Python, run one line at a time. The highlighted line is the one that just ran.</p>
+    </div>
+    <div class="tabs" role="tablist" id="tabs"></div>
+  </header>
+
+  <div class="controls">
+    <div class="group">
+      <button class="btn" id="reset" title="Back to the start">⏮</button>
+      <button class="btn" id="back">← Back</button>
+      <button class="btn primary" id="play">▶ Play</button>
+      <button class="btn" id="next">Step →</button>
+    </div>
+    <span class="counter" id="counter"></span>
+    <input type="range" id="scrub" min="0" max="0" value="0" aria-label="Jump to step">
+    <div class="group">
+      <label for="speed">Speed</label>
+      <input type="range" id="speed" min="1" max="5" value="3" style="width:80px;accent-color:var(--accent)">
+    </div>
+    <div class="group">
+      <label for="nums">Numbers</label>
+      <input id="nums" value="5, 2, 8, 1, 9, 3" spellcheck="false">
+      <button class="btn" id="use">Use</button>
+      <button class="btn" id="rand">Random</button>
+      <span class="err" id="err"></span>
+    </div>
+  </div>
+
+  <section class="card about" id="about"></section>
+
+  <details class="card compare">
+    <summary>Compare all five side by side</summary>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Sort</th><th>The idea in one line</th><th>What is final after one round?</th><th>Moves items by…</th><th>Speed</th><th>Stops early if already sorted?</th></tr></thead>
+        <tbody>
+          <tr><td><code>bubble</code></td><td>Swap neighbours that are in the wrong order, again and again</td><td>The <b>last</b> spot (biggest number)</td><td>Many small swaps of neighbours</td><td>O(n²)</td><td>Yes → O(n)</td></tr>
+          <tr><td><code>selection</code></td><td>Find the smallest of the rest, swap it to the front</td><td>The <b>first</b> spot (smallest number)</td><td>One long swap per round</td><td>O(n²) always</td><td>No</td></tr>
+          <tr><td><code>insertion</code></td><td>Take the next card, slide it left into its place</td><td>Nothing is final yet. The left part is only sorted <i>among itself</i></td><td>Sliding bigger cards right</td><td>O(n²)</td><td>Yes → O(n)</td></tr>
+          <tr><td><code>merge</code></td><td>Split in half until pieces of 1, then glue sorted piles together</td><td>Each glued piece is sorted</td><td>Building new lists (merge)</td><td>O(n log n) always</td><td>No, but it's fast anyway</td></tr>
+          <tr><td><code>quick</code></td><td>Pick a pivot, split into smaller / equal / bigger, repeat on each side</td><td>The pivot (all equal ones) is in its final place</td><td>Building new lists (less / equal / greater)</td><td>O(n log n) usually, O(n²) worst</td><td>No</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="pairnote"><b>The two pairs people mix up:</b> <b>Bubble vs selection:</b> bubble fixes the <i>end</i> with lots of small neighbour swaps. Selection fixes the <i>front</i> with one swap per round. <b>Merge vs quick:</b> merge splits <i>without thinking</i> (just the middle) and does the hard work <i>afterwards</i> when gluing. Quick does the hard work <i>first</i> (splitting around the pivot), so gluing afterwards is just <code>+</code>.</p>
+  </details>
+
+  <div class="main">
+    <div class="code" id="code" aria-label="Python code"></div>
+    <div class="side">
+      <div class="card explain">
+        <p class="eyebrow" id="lineLabel">Line</p>
+        <div class="linecode" id="lineCode"></div>
+        <p class="what" id="what"></p>
+        <p class="eyebrow">Right now</p>
+        <p class="now" id="now"></p>
+        <span class="finished" id="finished" hidden>Finished</span>
+      </div>
+      <div class="card">
+        <p class="eyebrow">The lists</p>
+        <div class="rows" id="rows"></div>
+        <p class="eyebrow" style="margin-top:16px">Variables</p>
+        <div class="vars" id="vars"></div>
+        <div class="legend" id="legend"></div>
+      </div>
+      <div class="card" id="stackCard" hidden>
+        <p class="eyebrow">Call stack · who is waiting for whom (newest at the bottom)</p>
+        <div class="stack" id="stack"></div>
+      </div>
+      <p class="keys">Keys: <kbd>→</kbd> step, <kbd>←</kbd> back, <kbd>Space</kbd> play or pause.</p>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  // ---------- helpers ----------
+  let S = [];
+  const fmt = a => "[" + a.join(", ") + "]";
+  const L = (name, vals, marks, ptrs, dim) => ({ name, vals: vals.slice(), marks: Object.assign({}, marks || {}), ptrs: Object.assign({}, ptrs || {}), dim: !!dim });
+  const P = pairs => { const o = {}; pairs.forEach(([i, lab]) => { if (i == null || i < 0) return; o[i] = o[i] ? o[i] + "," + lab : lab; }); return o; };
+  const snap = (line, msg, lists, vars, stack) => S.push({ line, msg, lists, vars: Object.assign({}, vars || {}), stack: stack ? stack.map(f => ({ label: f.label, note: f.note })) : null });
+  const range = (a, b, cls) => { const m = {}; for (let x = a; x < b; x++) m[x] = cls; return m; };
+
+  // ---------- algorithms ----------
+  const ALGOS = {
+    bubble: {
+      tab: "bubble_sort",
+      code: [
+        "def bubble_sort(items, key=lambda x: x):",
+        "    out = list(items)",
+        "    for end in range(len(out) - 1):",
+        "        swapped = False",
+        "        for i in range(len(out) - 1):",
+        "            if key(out[i]) > key(out[i + 1]):",
+        "                out[i], out[i + 1] = out[i + 1], out[i]",
+        "                swapped = True",
+        "        if not swapped:",
+        "            break",
+        "    return out",
+      ],
+      what: {
+        1: "Defines the function. items is the list you pass in. key says what to compare; by default it is the items themselves, so you can ignore key here.",
+        2: "Makes a copy of the list. All changes happen to out, so the original items is never touched.",
+        3: "The outer loop. Each round is one pass along the whole list. n − 1 passes are always enough.",
+        4: "Resets a flag at the start of every pass. It will record whether this pass swapped anything.",
+        5: "The inner loop walks along the list. i stops one before the end, because line 6 also looks at out[i + 1].",
+        6: "Compares two neighbours. True means the left one is bigger, so they are in the wrong order.",
+        7: "Swaps the two neighbours in one line. Python reads the right side first (the pair in new order), then puts it back.",
+        8: "Notes that this pass changed something.",
+        9: "After a whole pass: did nothing get swapped?",
+        10: "Jumps out of the outer loop early. The list is already sorted.",
+        11: "Gives back the sorted copy.",
+      },
+      legend: [["cmp", "being compared"], ["swap", "just moved"], ["done", "final spot"]],
+      run(items) {
+        const n = items.length, out = items.slice();
+        let doneFrom = n;
+        const rows = (marks, ptrs) => [L("items", items, {}, {}, true), L("out", out, Object.assign(range(doneFrom, n, "done"), marks || {}), ptrs)];
+        const sw = s => (s ? "True" : "False");
+        snap(1, `bubble_sort is called with items = <b>${fmt(items)}</b>.`, [L("items", items)], {});
+        snap(2, `out is a new copy: <b>${fmt(out)}</b>. From now on only out changes.`, rows(), {});
+        for (let end = 0; end < n - 1; end++) {
+          snap(3, `Pass <b>${end + 1}</b> starts (end = ${end}). At most ${n - 1} passes.`, rows(), { end });
+          let swapped = false;
+          snap(4, `No swaps yet in this pass: swapped = False.`, rows(), { end, swapped: "False" });
+          for (let i = 0; i < n - 1; i++) {
+            const V = { end, swapped: sw(swapped), i };
+            const ptr = P([[i, "i"], [i + 1, "i+1"]]);
+            const a = out[i], b = out[i + 1];
+            snap(5, `i = ${i}. Look at the neighbours out[${i}] = <b>${a}</b> and out[${i + 1}] = <b>${b}</b>.` + (i + 1 >= doneFrom ? " (This end of the list is already final, so nothing will swap. Our version still checks it.)" : ""), rows({}, ptr), V);
+            if (a > b) {
+              snap(6, `Is ${a} > ${b}? <b>Yes.</b> The bigger one is on the left, so they are in the wrong order.`, rows({ [i]: "cmp", [i + 1]: "cmp" }, ptr), V);
+              out[i] = b; out[i + 1] = a;
+              snap(7, `Swap: <b>${a}</b> moves one step right, <b>${b}</b> one step left. out = ${fmt(out)}.`, rows({ [i]: "swap", [i + 1]: "swap" }, ptr), V);
+              swapped = true;
+              snap(8, `Write down that this pass changed something: swapped = True.`, rows({}, ptr), Object.assign({}, V, { swapped: "True" }));
+            } else {
+              snap(6, `Is ${a} > ${b}? <b>No.</b> Right order already, so lines 7 and 8 are skipped.`, rows({ [i]: "cmp", [i + 1]: "cmp" }, ptr), V);
+            }
+          }
+          doneFrom = n - 1 - end;
+          const V = { end, swapped: sw(swapped) };
+          snap(9, `Pass ${end + 1} is over. <b>${out[doneFrom]}</b> has bubbled up to position ${doneFrom} and is final. ` + (swapped ? "swapped is True, so not done yet: go back to line 3." : "swapped is False: a whole pass without swaps means the list is sorted."), rows(), V);
+          if (!swapped) { doneFrom = 0; snap(10, `break: stop now, no more passes needed.`, rows(), V); break; }
+        }
+        doneFrom = 0;
+        snap(11, `Return <b>${fmt(out)}</b>. items is still ${fmt(items)}.`, rows(), {});
+      },
+    },
+
+    selection: {
+      tab: "selection_sort",
+      code: [
+        "def selection_sort(items, key=lambda x: x):",
+        "    out = list(items)",
+        "    for i in range(len(out) - 1):",
+        "        min_idx = i",
+        "        for j in range(i + 1, len(out)):",
+        "            if key(out[j]) < key(out[min_idx]):",
+        "                min_idx = j",
+        "        out[i], out[min_idx] = out[min_idx], out[i]",
+        "    return out",
+      ],
+      what: {
+        1: "Defines the function. key is the default (compare the items themselves), so you can ignore it here.",
+        2: "Makes a copy, so the original items is never changed.",
+        3: "The outer loop. i is the position we fill this round. It stops one early, because the last position fills itself.",
+        4: "First guess: the number at position i is the smallest. min_idx stores a position, not a value.",
+        5: "The inner loop. j visits every position after i, all the way to the end.",
+        6: "Is the number at j smaller than the smallest found so far?",
+        7: "Yes: remember where the new smallest is.",
+        8: "Swaps the smallest into position i. That position is now final and is never touched again.",
+        9: "Gives back the sorted copy.",
+      },
+      legend: [["min", "smallest so far (min_idx)"], ["cmp", "being checked (j)"], ["swap", "just moved"], ["done", "final spot"]],
+      run(items) {
+        const n = items.length, out = items.slice();
+        let doneTo = 0;
+        const rows = (marks, ptrs) => [L("items", items, {}, {}, true), L("out", out, Object.assign(range(0, doneTo, "done"), marks || {}), ptrs)];
+        snap(1, `selection_sort is called with items = <b>${fmt(items)}</b>.`, [L("items", items)], {});
+        snap(2, `out is a new copy: <b>${fmt(out)}</b>.`, rows(), {});
+        for (let i = 0; i < n - 1; i++) {
+          snap(3, `Round ${i + 1}: fill position <b>${i}</b> with the smallest number that is left.` + (i > 0 ? ` Positions 0–${i - 1} are already final.` : ""), rows({}, { [i]: "i" }), { i });
+          let mi = i;
+          snap(4, `First guess: the smallest is at position ${i} (the number <b>${out[i]}</b>). min_idx = ${i}.`, rows({ [mi]: "min" }, P([[i, "i"], [mi, "min_idx"]])), { i, min_idx: mi });
+          for (let j = i + 1; j < n; j++) {
+            const ptr = P([[i, "i"], [mi, "min_idx"], [j, "j"]]);
+            snap(5, `j = ${j}. Next number to check: out[${j}] = <b>${out[j]}</b>.`, rows({ [mi]: "min" }, ptr), { i, min_idx: mi, j });
+            if (out[j] < out[mi]) {
+              snap(6, `Is ${out[j]} < ${out[mi]} (smallest so far)? <b>Yes.</b>`, rows({ [mi]: "min", [j]: "cmp" }, ptr), { i, min_idx: mi, j });
+              mi = j;
+              snap(7, `New smallest: min_idx = ${j} (the number <b>${out[j]}</b>).`, rows({ [mi]: "min" }, P([[i, "i"], [mi, "min_idx"], [j, "j"]])), { i, min_idx: mi, j });
+            } else {
+              snap(6, `Is ${out[j]} < ${out[mi]} (smallest so far)? <b>No</b>, keep the old one. Line 7 is skipped.`, rows({ [mi]: "min", [j]: "cmp" }, ptr), { i, min_idx: mi, j });
+            }
+          }
+          const a = out[i], b = out[mi];
+          out[i] = b; out[mi] = a; doneTo = i + 1;
+          snap(8, mi === i
+            ? `The smallest (<b>${b}</b>) was already at position ${i}, so it swaps with itself and nothing moves. Position ${i} is final.`
+            : `Swap: the smallest, <b>${b}</b>, goes to position ${i}. <b>${a}</b> goes to where ${b} was (position ${mi}). Position ${i} is final.`,
+            rows(mi === i ? {} : { [i]: "swap", [mi]: "swap" }, P([[i, "i"], [mi, "min_idx"]])), { i, min_idx: mi });
+        }
+        doneTo = n;
+        snap(9, `The loop never visits the last position, but it must hold the biggest number, so it is final too. Return <b>${fmt(out)}</b>.`, rows(), {});
+      },
+    },
+
+    insertion: {
+      tab: "insertion_sort",
+      code: [
+        "def insertion_sort(items, key=lambda x: x):",
+        "    out = list(items)",
+        "    for i in range(1, len(out)):",
+        "        current = out[i]",
+        "        j = i - 1",
+        "        while j >= 0 and key(out[j]) > key(current):",
+        "            out[j + 1] = out[j]",
+        "            j = j - 1",
+        "        out[j + 1] = current",
+        "    return out",
+      ],
+      what: {
+        1: "Defines the function. key is the default, so you can ignore it here.",
+        2: "Makes a copy, so the original items is never changed.",
+        3: "Picks up each card, starting with the second one. The first card alone already counts as sorted.",
+        4: "Holds the card in a variable. Now its spot in the list can be written over safely.",
+        5: "j starts at the spot just to the left of the card.",
+        6: "Keep going while there is a card to the left (j >= 0) AND it is bigger than the one we hold. Python checks j >= 0 first and stops there if it is False, so out[-1] is never read.",
+        7: "Copies the bigger card one spot to the right. Its old spot becomes the gap.",
+        8: "Moves one spot further left.",
+        9: "Puts the held card into the gap. It is j + 1 because j stopped one spot left of the gap.",
+        10: "Gives back the sorted copy.",
+      },
+      legend: [["held", "card in your hand (current)"], ["cmp", "being compared"], ["swap", "just slid right"], ["gap", "the gap (an old copy)"], ["sorted", "sorted part so far"], ["done", "finished"]],
+      run(items) {
+        const n = items.length, out = items.slice();
+        let sortedTo = 1, allDone = false;
+        const base = () => (allDone ? range(0, n, "done") : range(0, sortedTo, "sorted"));
+        const rows = (marks, ptrs) => [L("items", items, {}, {}, true), L("out", out, Object.assign(base(), marks || {}), ptrs)];
+        snap(1, `insertion_sort is called with items = <b>${fmt(items)}</b>.`, [L("items", items)], {});
+        snap(2, `out is a new copy: <b>${fmt(out)}</b>.`, rows(), {});
+        for (let i = 1; i < n; i++) {
+          snap(3, `i = ${i}. Pick up the card at position ${i}. The cards to its left (0–${i - 1}) are sorted among themselves.`, rows({ [i]: "held" }, { [i]: "i" }), { i });
+          const cur = out[i];
+          snap(4, `Hold it: current = <b>${cur}</b>.`, rows({ [i]: "held" }, { [i]: "i" }), { i, current: cur });
+          let j = i - 1, gap = i;
+          snap(5, `Start just left of it: j = ${j}.`, rows({ [gap]: "gap" }, P([[i, "i"], [j, "j"]])), { i, current: cur, j });
+          for (;;) {
+            const ptr = P([[j, "j"]]);
+            const V = { i, current: cur, j };
+            if (j >= 0 && out[j] > cur) {
+              snap(6, `Is j >= 0 and out[${j}] = ${out[j]} > current = ${cur}? <b>Yes</b>, so ${out[j]} has to move out of the way.`, rows({ [j]: "cmp", [gap]: "gap" }, ptr), V);
+              out[j + 1] = out[j]; gap = j;
+              snap(7, `Slide <b>${out[j]}</b> one spot right, to position ${j + 1}. Position ${j} is now the gap (it still shows an old copy).`, rows({ [j + 1]: "swap", [gap]: "gap" }, ptr), V);
+              j = j - 1;
+              snap(8, `Look one more spot left: j = ${j}.`, rows({ [gap]: "gap" }, P([[j, "j"]])), { i, current: cur, j });
+            } else {
+              snap(6, j < 0
+                ? `j = -1, so j >= 0 is False: there is nothing more to the left. Stop the while loop.`
+                : `Is out[${j}] = ${out[j]} > current = ${cur}? <b>No.</b> Stop the while loop here.`,
+                rows(j >= 0 ? { [j]: "cmp", [gap]: "gap" } : { [gap]: "gap" }, ptr), V);
+              break;
+            }
+          }
+          out[j + 1] = cur; sortedTo = i + 1;
+          snap(9, `Put current (<b>${cur}</b>) down in the gap at position ${j + 1}. Positions 0–${i} are now sorted among themselves. out = ${fmt(out)}.`, rows({ [j + 1]: "held" }, {}), { i, current: cur, j });
+        }
+        allDone = true;
+        snap(10, `Every card has been picked up once. Return <b>${fmt(out)}</b>.`, rows(), {});
+      },
+    },
+
+    merge: {
+      tab: "merge_sort",
+      recursive: true,
+      code: [
+        "def merge(left, right, key=lambda x: x):",
+        "    result = []",
+        "    i = 0",
+        "    j = 0",
+        "    while i < len(left) and j < len(right):",
+        "        if key(left[i]) <= key(right[j]):",
+        "            result.append(left[i])",
+        "            i = i + 1",
+        "        else:",
+        "            result.append(right[j])",
+        "            j = j + 1",
+        "    return result + left[i:] + right[j:]",
+        "",
+        "def merge_sort(items, key=lambda x: x):",
+        "    if len(items) <= 1:",
+        "        return list(items)",
+        "    mid = len(items) // 2",
+        "    left = merge_sort(items[:mid], key)",
+        "    right = merge_sort(items[mid:], key)",
+        "    return merge(left, right, key)",
+      ],
+      what: {
+        1: "Glues two lists that are ALREADY sorted into one sorted list.",
+        2: "The merged list starts empty.",
+        3: "i points at the front card of the left pile.",
+        4: "j points at the front card of the right pile.",
+        5: "Repeat while both piles still have cards.",
+        6: "Compares the two front cards. <= means a tie goes to the left pile, which keeps the sort stable.",
+        7: "Takes the left front card.",
+        8: "The next left card becomes the front.",
+        9: "Otherwise the right front card is smaller.",
+        10: "Takes the right front card.",
+        11: "The next right card becomes the front.",
+        12: "One pile is empty. Whatever is left in the other pile is sorted and bigger than everything taken, so it goes on the end. left[i:] is just [] if that pile is used up.",
+        14: "Sorts a list by splitting it in half again and again.",
+        15: "Base case: a list with 0 or 1 items is already sorted.",
+        16: "Stops splitting and returns a copy.",
+        17: "Finds the middle. // divides and rounds down, so 5 // 2 = 2.",
+        18: "Sorts the left half by calling merge_sort itself (recursion). This call pauses here until that one is finished.",
+        19: "The same for the right half.",
+        20: "Both halves are sorted now, so merge can glue them together.",
+      },
+      legend: [["half-l", "left half"], ["half-r", "right half"], ["cmp", "front cards compared"], ["swap", "just added"], ["taken", "already taken"]],
+      run(items0) {
+        const stack = [];
+        function merge(left, right) {
+          const fr = { label: `merge(${fmt(left)}, ${fmt(right)})`, note: "" }; stack.push(fr);
+          let result = null, i = 0, j = 0;
+          const rows = (m) => {
+            m = m || {};
+            const lm = range(0, i, "taken"), rm = range(0, j, "taken");
+            if (m.l != null) lm[m.l] = m.lc || "cmp";
+            if (m.r != null) rm[m.r] = m.rc || "cmp";
+            const r = [L("left", left, lm, i < left.length ? { [i]: "i" } : {}), L("right", right, rm, j < right.length ? { [j]: "j" } : {})];
+            if (result) r.push(L("result", result, m.res || {}));
+            return r;
+          };
+          snap(1, `merge gets two sorted lists: left = <b>${fmt(left)}</b>, right = <b>${fmt(right)}</b>.`, rows(), {}, stack);
+          result = [];
+          snap(2, `result starts empty.`, rows(), {}, stack);
+          snap(3, `i = 0: the left front card is <b>${left[0]}</b>.`, rows(), { i: 0 }, stack);
+          snap(4, `j = 0: the right front card is <b>${right[0]}</b>.`, rows(), { i: 0, j: 0 }, stack);
+          for (;;) {
+            if (i < left.length && j < right.length) {
+              snap(5, `i = ${i} < ${left.length} and j = ${j} < ${right.length}: both piles still have cards, so go on.`, rows(), { i, j }, stack);
+              if (left[i] <= right[j]) {
+                snap(6, `Is ${left[i]} <= ${right[j]}? <b>Yes</b>, so the left card goes first.`, rows({ l: i, r: j }), { i, j }, stack);
+                result.push(left[i]);
+                snap(7, `Take <b>${left[i]}</b>: result = ${fmt(result)}.`, rows({ l: i, lc: "swap", res: { [result.length - 1]: "swap" } }), { i, j }, stack);
+                i++;
+                snap(8, `Next left card: i = ${i}.`, rows(), { i, j }, stack);
+              } else {
+                snap(6, `Is ${left[i]} <= ${right[j]}? <b>No</b>, so skip to else.`, rows({ l: i, r: j }), { i, j }, stack);
+                snap(9, `else: the right card (<b>${right[j]}</b>) is smaller.`, rows({ l: i, r: j }), { i, j }, stack);
+                result.push(right[j]);
+                snap(10, `Take <b>${right[j]}</b>: result = ${fmt(result)}.`, rows({ r: j, rc: "swap", res: { [result.length - 1]: "swap" } }), { i, j }, stack);
+                j++;
+                snap(11, `Next right card: j = ${j}.`, rows(), { i, j }, stack);
+              }
+            } else {
+              const msg = i >= left.length ? `i = ${i} is not < ${left.length}: the left pile is empty.` : `j = ${j} is not < ${right.length}: the right pile is empty.`;
+              snap(5, msg + " The while loop stops.", rows(), { i, j }, stack);
+              break;
+            }
+          }
+          const lo = left.slice(i), ro = right.slice(j), res = result.concat(lo, ro);
+          const resMarks = range(result.length, res.length, "swap");
+          const lm = Object.assign(range(0, i, "taken"), range(i, left.length, "swap"));
+          const rm = Object.assign(range(0, j, "taken"), range(j, right.length, "swap"));
+          snap(12, `Add the leftovers: ${fmt(result)} + left[${i}:] ${fmt(lo)} + right[${j}:] ${fmt(ro)} = <b>${fmt(res)}</b>. Give it back to merge_sort.`,
+            [L("left", left, lm), L("right", right, rm), L("result", res, resMarks)], { i, j }, stack);
+          stack.pop();
+          return res;
+        }
+        function ms(items) {
+          const n = items.length;
+          const fr = { label: `merge_sort(${fmt(items)})`, note: "" }; stack.push(fr);
+          let mid = null, left = null, right = null;
+          const rows = () => {
+            const marks = mid == null ? {} : Object.assign(range(0, mid, "half-l"), range(mid, n, "half-r"));
+            const r = [L("items", items, marks)];
+            if (left) r.push(L("left", left));
+            if (right) r.push(L("right", right));
+            return r;
+          };
+          const V = () => (mid == null ? {} : { mid });
+          snap(14, `merge_sort is called with items = <b>${fmt(items)}</b>.`, rows(), V(), stack);
+          if (n <= 1) {
+            snap(15, `len(items) is ${n}, which is <= 1. <b>Base case</b>: nothing left to split.`, rows(), V(), stack);
+            snap(16, `Return ${fmt(items)} as it is. One item is already sorted. Back to whoever called us.`, rows(), V(), stack);
+            stack.pop();
+            return items.slice();
+          }
+          snap(15, `len(items) is ${n}, more than 1, so keep splitting (line 16 is skipped).`, rows(), V(), stack);
+          mid = Math.floor(n / 2);
+          snap(17, `mid = ${n} // 2 = <b>${mid}</b>. Left half = items[:${mid}] = ${fmt(items.slice(0, mid))}, right half = items[${mid}:] = ${fmt(items.slice(mid))}.`, rows(), V(), stack);
+          fr.note = "paused at line 18, waiting for the left half";
+          snap(18, `Sort the left half ${fmt(items.slice(0, mid))}. merge_sort calls itself, and this call waits here.`, rows(), V(), stack);
+          left = ms(items.slice(0, mid));
+          fr.note = "";
+          snap(18, `Back here. The left half came back sorted: left = <b>${fmt(left)}</b>.`, rows(), V(), stack);
+          fr.note = "paused at line 19, waiting for the right half";
+          snap(19, `Now sort the right half ${fmt(items.slice(mid))} the same way.`, rows(), V(), stack);
+          right = ms(items.slice(mid));
+          fr.note = "";
+          snap(19, `Back here. The right half came back sorted: right = <b>${fmt(right)}</b>.`, rows(), V(), stack);
+          fr.note = "paused at line 20, waiting for merge";
+          snap(20, `Both halves are sorted. Call merge(${fmt(left)}, ${fmt(right)}) to glue them together.`, rows(), V(), stack);
+          const res = merge(left, right);
+          fr.note = "";
+          const r = rows(); r.push(L("merged", res, range(0, res.length, "swap")));
+          snap(20, `merge gave back <b>${fmt(res)}</b>. Return it` + (stack.length > 1 ? " to the call that is waiting for it." : ". That is the final answer!"), r, V(), stack);
+          stack.pop();
+          return res;
+        }
+        const out = ms(items0);
+        S.push({ line: 20, msg: `All done. merge_sort(${fmt(items0)}) returned <b>${fmt(out)}</b>.`, lists: [L("items", items0, {}, {}, true), L("result", out, range(0, out.length, "done"))], vars: {}, stack: [] });
+      },
+    },
+
+    quick: {
+      tab: "quick_sort",
+      recursive: true,
+      code: [
+        "def quick_sort(items, key=lambda x: x):",
+        "    if len(items) <= 1:",
+        "        return list(items)",
+        "    pivot = key(items[len(items) // 2])",
+        "    less    = [x for x in items if key(x) < pivot]",
+        "    equal   = [x for x in items if key(x) == pivot]",
+        "    greater = [x for x in items if key(x) > pivot]",
+        "    return quick_sort(less, key) + equal + quick_sort(greater, key)",
+      ],
+      what: {
+        1: "Sorts by picking a pivot and splitting the list into smaller, equal and bigger.",
+        2: "Base case: a list with 0 or 1 items is already sorted.",
+        3: "Stops and returns a copy.",
+        4: "Picks the item in the middle position as the pivot. With key left as default, the pivot is just that number.",
+        5: "A list comprehension: loop over items, keep every x smaller than the pivot. Same as an empty list + for loop + append.",
+        6: "Keeps every x equal to the pivot. These are already in the right place compared with the rest.",
+        7: "Keeps every x bigger than the pivot.",
+        8: "Python runs this left to right: first quick_sort(less), then quick_sort(greater), then joins small + equal + big.",
+      },
+      legend: [["pivot", "pivot"], ["held", "goes into this list"], ["swap", "sorted result"], ["done", "finished"]],
+      run(items0) {
+        const stack = [];
+        function qs(items) {
+          const n = items.length;
+          const fr = { label: `quick_sort(${fmt(items)})`, note: "" }; stack.push(fr);
+          let pivot = null, pIdx = null, less = null, equal = null, greater = null, sl = null, sg = null;
+          const rows = (itemMarks) => {
+            const r = [L("items", items, Object.assign(pIdx == null ? {} : { [pIdx]: "pivot" }, itemMarks || {}), pIdx == null ? {} : { [pIdx]: "pivot" })];
+            if (less) r.push(L("less", less));
+            if (equal) r.push(L("equal", equal));
+            if (greater) r.push(L("greater", greater));
+            if (sl) r.push(L("sorted less", sl, range(0, sl.length, "swap")));
+            if (sg) r.push(L("sorted greater", sg, range(0, sg.length, "swap")));
+            return r;
+          };
+          const V = () => (pivot == null ? {} : { pivot });
+          snap(1, `quick_sort is called with items = <b>${fmt(items)}</b>.`, rows(), V(), stack);
+          if (n <= 1) {
+            snap(2, `len(items) is ${n}, which is <= 1. <b>Base case.</b>`, rows(), V(), stack);
+            snap(3, `Return ${fmt(items)} as it is. Back to whoever called us.`, rows(), V(), stack);
+            stack.pop();
+            return items.slice();
+          }
+          snap(2, `len(items) is ${n}, more than 1, so keep going (line 3 is skipped).`, rows(), V(), stack);
+          pIdx = Math.floor(n / 2); pivot = items[pIdx];
+          snap(4, `Middle position = ${n} // 2 = ${pIdx}, so pivot = items[${pIdx}] = <b>${pivot}</b>.`, rows(), V(), stack);
+          const check = (op, test) => items.map(x => `${x} ${op} ${pivot} ${test(x) ? "✓" : "✗"}`).join(", ");
+          const marksFor = test => { const m = {}; items.forEach((x, k) => { if (test(x)) m[k] = "held"; }); return m; };
+          less = items.filter(x => x < pivot);
+          snap(5, `Check every x: ${check("<", x => x < pivot)}. So less = <b>${fmt(less)}</b>.`, rows(marksFor(x => x < pivot)), V(), stack);
+          equal = items.filter(x => x === pivot);
+          snap(6, `Check every x: ${check("==", x => x === pivot)}. So equal = <b>${fmt(equal)}</b>.`, rows(marksFor(x => x === pivot)), V(), stack);
+          greater = items.filter(x => x > pivot);
+          snap(7, `Check every x: ${check(">", x => x > pivot)}. So greater = <b>${fmt(greater)}</b>.`, rows(marksFor(x => x > pivot)), V(), stack);
+          fr.note = "paused at line 8, waiting for quick_sort(less)";
+          snap(8, `First part of line 8: quick_sort(less), so sort ${fmt(less)}. quick_sort calls itself, and this call waits.`, rows(), V(), stack);
+          sl = qs(less);
+          fr.note = "paused at line 8, waiting for quick_sort(greater)";
+          snap(8, `quick_sort(less) came back as <b>${fmt(sl)}</b>. Next part of line 8: quick_sort(greater), so sort ${fmt(greater)}.`, rows(), V(), stack);
+          sg = qs(greater);
+          fr.note = "";
+          const res = sl.concat(equal, sg);
+          const r = rows(); r.push(L("returned", res, range(0, res.length, "swap")));
+          snap(8, `quick_sort(greater) came back as <b>${fmt(sg)}</b>. Join: ${fmt(sl)} + ${fmt(equal)} + ${fmt(sg)} = <b>${fmt(res)}</b>. Return it` + (stack.length > 1 ? " to the call that is waiting." : ". That is the final answer!"), r, V(), stack);
+          stack.pop();
+          return res;
+        }
+        const out = qs(items0);
+        S.push({ line: 8, msg: `All done. quick_sort(${fmt(items0)}) returned <b>${fmt(out)}</b>.`, lists: [L("items", items0, {}, {}, true), L("result", out, range(0, out.length, "done"))], vars: {}, stack: [] });
+      },
+    },
+  };
+
+  const ABOUT = {
+    bubble: {
+      idea: "Walk along the list and swap any two neighbours that are in the wrong order. Repeat until a whole pass has no swaps.",
+      picture: "Big numbers float to the right end, like bubbles rising in a drink.",
+      steps: ["Compare positions 0 and 1, swap if the left one is bigger.", "Then 1 and 2, then 2 and 3, all the way to the end.", "The biggest number has now been carried to the end.", "Do another pass. Stop when a pass makes zero swaps."],
+      after: "The biggest unfinished number is at the end and never moves again.",
+      speed: "O(n²). On a list that is already sorted: one pass and stop, so O(n).",
+      vs: "Unlike selection sort, it moves things with lots of tiny neighbour swaps, and it finishes the list from the end.",
+    },
+    selection: {
+      idea: "Find the smallest number in the part that is not sorted yet, and swap it to the front of that part. Repeat.",
+      picture: "Picking the shortest person out of a line and putting them first, then the shortest of the rest, and so on.",
+      steps: ["Look at everything from position 0 to the end and find the smallest.", "Swap it into position 0. Done with that spot.", "Look from position 1 to the end, find the smallest, swap it into position 1.", "Keep going until one number is left."],
+      after: "The front spot of the unsorted part is final.",
+      speed: "Always O(n²). It never stops early, because it always searches the whole rest of the list.",
+      vs: "Unlike bubble sort, it does only one swap per round, and it finishes the list from the front.",
+    },
+    insertion: {
+      idea: "Take the next number and slide it left into its correct place among the numbers you already sorted.",
+      picture: "Sorting playing cards in your hand: pick up a card, slide it in where it belongs.",
+      steps: ["The first card counts as a sorted hand of 1.", "Pick up the next card.", "Bigger cards in your hand shift one spot right to make room.", "Drop the card in the gap. Repeat with the next card."],
+      after: "The left part is sorted among itself, but not final yet. A smaller card later on can still push into it.",
+      speed: "O(n²). Very fast, O(n), when the list is already almost sorted, because cards barely slide.",
+      vs: "Unlike selection sort, it does not search for the smallest. It takes whatever card comes next and finds where it fits.",
+    },
+    merge: {
+      idea: "Split the list in half, and the halves in half, until every piece has 1 item. Then glue the pieces back together in order.",
+      picture: "Two sorted piles of cards face up. Always take the smaller of the two top cards.",
+      steps: ["Split: [5,2,8,1] → [5,2] and [8,1] → [5] [2] [8] [1].", "A piece of 1 is already sorted (the base case).", "Glue pairs together in order: [2,5] and [1,8].", "Glue those: [1,2,5,8]."],
+      after: "Each glued piece is sorted, and the pieces get bigger until one is the whole list.",
+      speed: "Always O(n log n): about log n levels of splitting, and each level glues all n items once. Needs extra memory for the new lists.",
+      vs: "Unlike quick sort, the splitting is dumb (just the middle). All the clever work happens afterwards, in merge.",
+    },
+    quick: {
+      idea: "Pick a pivot (here, the middle item). Split the list into smaller, equal and bigger than the pivot. Sort the smaller and bigger lists the same way, then join them.",
+      picture: "Sorting exam papers: one pile below 50, one pile at 50, one pile above 50. Then sort each pile the same way.",
+      steps: ["Pick the pivot, e.g. [5,2,8,1,9,3] → middle item 1.", "less = [], equal = [1], greater = [5,2,8,9,3].", "Sort less and greater the same way (recursion).", "Join: sorted less + equal + sorted greater."],
+      after: "The pivot is in its final place. Everything smaller ends up left of it, everything bigger right of it.",
+      speed: "O(n log n) when the pivot splits the list roughly in half. O(n²) when the pivot is always the smallest or biggest (lopsided splits).",
+      vs: "Unlike merge sort, the clever work happens first (splitting around the pivot). Joining afterwards is just +.",
+    },
+  };
+
+  function renderAbout() {
+    const a = ABOUT[algo];
+    $("about").innerHTML = `
+      <h2>How <code>${ALGOS[algo].tab}</code> works</h2>
+      <div>
+        <p class="idea">${a.idea}</p>
+        <p class="what" style="margin:0 0 10px"><b>Picture it:</b> ${a.picture}</p>
+        <ol>${a.steps.map(s => `<li>${s}</li>`).join("")}</ol>
+      </div>
+      <dl>
+        <div><dt>After each round</dt><dd>${a.after}</dd></div>
+        <div><dt>Speed</dt><dd>${a.speed}</dd></div>
+        <div><dt>How it differs</dt><dd>${a.vs}</dd></div>
+      </dl>`;
+  }
+
+  const LEGEND_COLORS = { cmp: "var(--cmp)", swap: "var(--swap)", done: "var(--done)", min: "var(--min)", held: "var(--held)", pivot: "var(--min)", sorted: "var(--sorted)", gap: "transparent", taken: "var(--tile)", "half-l": "var(--held)", "half-r": "var(--min)" };
+
+  // ---------- state ----------
+  let algo = "bubble", input = [5, 2, 8, 1, 9, 3], steps = [], k = 0, timer = null, maxVal = 9;
+  const $ = id => document.getElementById(id);
+
+  const esc = s => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  function hl(src) {
+    return esc(src)
+      .replace(/\b(def|for|in|if|else|while|return|and|not|break|lambda|True|False)\b/g, '<span class="kw">$1</span>')
+      .replace(/\b(range|len|list)\b(?=\()/g, '<span class="bi">$1</span>')
+      .replace(/(<span class="kw">def<\/span> )(\w+)/g, '$1<span class="fn">$2</span>')
+      .replace(/\b(\d+)\b/g, '<span class="num">$1</span>');
+  }
+
+  function build() {
+    stop();
+    S = [];
+    ALGOS[algo].run(input);
+    steps = S;
+    k = 0;
+    maxVal = Math.max(1, ...input);
+    const A = ALGOS[algo];
+    $("code").innerHTML = A.code.map((c, i) => `<div class="ln" data-l="${i + 1}"><span class="no">${c === "" ? "" : i + 1}</span><span>${hl(c) || " "}</span></div>`).join("");
+    $("legend").innerHTML = A.legend.map(([c, t]) => `<span><i style="background:${LEGEND_COLORS[c]};${c === "gap" ? "border:1.5px dashed var(--muted)" : ""}${c === "taken" ? ";opacity:.35" : ""}"></i>${t}</span>`).join("");
+    $("stackCard").hidden = !A.recursive;
+    renderAbout();
+    $("scrub").max = steps.length - 1;
+    document.querySelectorAll(".tab").forEach(t => t.setAttribute("aria-selected", t.dataset.a === algo ? "true" : "false"));
+    render();
+  }
+
+  function render() {
+    const st = steps[k], prev = steps[k - 1], A = ALGOS[algo];
+    document.querySelectorAll(".code .ln").forEach(el => el.classList.toggle("active", +el.dataset.l === st.line));
+    $("lineLabel").textContent = `Line ${st.line}`;
+    $("lineCode").textContent = A.code[st.line - 1].trim();
+    $("what").textContent = A.what[st.line] || "";
+    $("now").innerHTML = st.msg;
+    $("finished").hidden = k !== steps.length - 1;
+
+    $("rows").innerHTML = st.lists.map(l => {
+      const cells = l.vals.length === 0 ? `<span class="empty">[ ]  (empty)</span>` : l.vals.map((v, i) => {
+        const h = 26 + Math.round(54 * v / maxVal);
+        return `<div class="cellwrap"><span class="idx">${i}</span><div class="cell ${l.marks[i] || ""}" style="height:${h}px">${v}</div><span class="ptr">${l.ptrs[i] || ""}</span></div>`;
+      }).join("");
+      return `<div class="row${l.dim ? " dim" : ""}"><div class="name">${l.name}${l.dim ? "<br><span style='font-size:11px'>(original)</span>" : ""}</div><div class="cells">${cells}</div></div>`;
+    }).join("");
+
+    const keys = Object.keys(st.vars);
+    $("vars").innerHTML = keys.length === 0 ? `<span class="novars">No loop variables right now.</span>` : keys.map(name => {
+      const changed = !prev || prev.vars[name] !== st.vars[name];
+      return `<span class="var${changed ? " changed" : ""}">${name} = ${st.vars[name]}</span>`;
+    }).join("");
+
+    if (A.recursive) {
+      const fr = st.stack || [];
+      $("stack").innerHTML = fr.length === 0 ? `<span class="novars">Nothing waiting. Every call has returned.</span>` :
+        fr.map((f, i) => `<div class="frame${i === fr.length - 1 ? " top" : ""}">${"&nbsp;&nbsp;".repeat(i)}${esc(f.label)}${f.note ? ` <span class="note">· ${f.note}</span>` : i === fr.length - 1 ? ` <span class="note">· running now</span>` : ""}</div>`).join("");
+    }
+
+    $("counter").textContent = `Step ${k + 1} / ${steps.length}`;
+    $("scrub").value = k;
+    $("back").disabled = k === 0;
+    $("next").disabled = k === steps.length - 1;
+  }
+
+  const speeds = [1400, 1000, 650, 380, 180];
+  function stop() { if (timer) clearInterval(timer); timer = null; $("play").textContent = "▶ Play"; }
+  function play() {
+    if (timer) return stop();
+    if (k === steps.length - 1) k = 0;
+    $("play").textContent = "❚❚ Pause";
+    timer = setInterval(() => { if (k < steps.length - 1) { k++; render(); } else stop(); }, speeds[$("speed").value - 1]);
+    render();
+  }
+
+  $("tabs").innerHTML = Object.entries(ALGOS).map(([a, A]) => `<button class="tab" role="tab" data-a="${a}">${A.tab}</button>`).join("");
+  $("tabs").addEventListener("click", e => { const t = e.target.closest(".tab"); if (t) { algo = t.dataset.a; build(); } });
+  $("next").onclick = () => { stop(); if (k < steps.length - 1) { k++; render(); } };
+  $("back").onclick = () => { stop(); if (k > 0) { k--; render(); } };
+  $("reset").onclick = () => { stop(); k = 0; render(); };
+  $("play").onclick = play;
+  $("scrub").oninput = e => { stop(); k = +e.target.value; render(); };
+  $("speed").oninput = () => { if (timer) { stop(); play(); } };
+  function useNums() {
+    const parts = $("nums").value.split(/[\s,;]+/).filter(Boolean);
+    const nums = parts.map(Number);
+    if (nums.some(x => !Number.isInteger(x) || x < 0 || x > 99)) { $("err").textContent = "Use whole numbers from 0 to 99."; return; }
+    if (nums.length < 2 || nums.length > 10) { $("err").textContent = "Use 2 to 10 numbers."; return; }
+    $("err").textContent = "";
+    input = nums; build();
+  }
+  $("use").onclick = useNums;
+  $("nums").addEventListener("keydown", e => { if (e.key === "Enter") useNums(); });
+  $("rand").onclick = () => {
+    const n = 6 + Math.floor(Math.random() * 2);
+    const a = Array.from({ length: n }, () => 1 + Math.floor(Math.random() * 20));
+    $("nums").value = a.join(", "); useNums();
+  };
+  document.addEventListener("keydown", e => {
+    if (e.target.tagName === "INPUT" && e.target.type !== "range") return;
+    if (e.key === "ArrowRight") { e.preventDefault(); $("next").click(); }
+    else if (e.key === "ArrowLeft") { e.preventDefault(); $("back").click(); }
+    else if (e.key === " ") { e.preventDefault(); play(); }
+  });
+
+  // Optional link to a given state: index.html?algo=merge&step=40
+  try {
+    const q = new URLSearchParams(location.search);
+    if (ALGOS[q.get("algo")]) algo = q.get("algo");
+    build();
+    const st = parseInt(q.get("step"), 10);
+    if (st > 0) { k = Math.min(st - 1, steps.length - 1); render(); }
+    if (q.get("compare")) document.querySelector(".compare").open = true;
+  } catch (e) { build(); }
+})();
+</script>
+</body>
+</html>
